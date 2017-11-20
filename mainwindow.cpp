@@ -81,7 +81,9 @@ void MainWindow::settingsChanged()
 
     scene->clear();
     QGraphicsPixmapItem* pixmap = scene->addPixmap(QPixmap::fromImage(img));
+    QGraphicsRectItem* rect = scene->addRect(pixmap->boundingRect().adjusted(-2, -2, 2, 2), Qt::SolidLine, Qt::NoBrush);
     pixmap->setScale(scaleFactor);
+    rect->setScale(scaleFactor);
     ui->preview->setScene(scene);
   }
 }
@@ -94,8 +96,12 @@ void MainWindow::saveImageAction()
 void MainWindow::loadImageAction()
 {
   QString fileName = QFileDialog::getOpenFileName(this, tr("Open File"),"", tr("Images (*.png *.xpm *.jpg)"));
-  if(srcImg)
-    delete srcImg;
-  srcImg = new QImage(fileName);
-  settingsChanged();
+
+  if(!fileName.isEmpty())
+  {
+    if(srcImg)
+        delete srcImg;
+    srcImg = new QImage(fileName);
+    settingsChanged();
+  }
 }

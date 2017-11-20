@@ -1,6 +1,8 @@
 #include "filters.h"
 #include "avir.h"
-#include <QtMath>
+#include <cmath>
+
+using namespace std;
 
 QImage ScaleAVIR(const QImage& input, float factor)
 {
@@ -49,42 +51,52 @@ namespace
       g = qGreen(val);
       b = qBlue(val);
       a = qAlpha(val);
+      return *this;
     }
+    
+    virtual ~KernelValue()
+    {};
 
     float distance(QRgb val)
     {
-      return qSqrt( (qRed(val)-r) + (qGreen(val)-g) + (qBlue(val)-b) + (qAlpha(val)-a) ) / 255.0f;
+      return sqrt(pow(qRed(val)-r, 2) + pow(qGreen(val)-g, 2) + pow(qBlue(val)-b, 2) + pow(qAlpha(val)-a, 2)) / 255.0f;
     }
   };
 
   QRgb dpidKernel(const QImage& src, QRgb refColor, int startX, int startY, int width, int height, float sharpeningCurve)
   {
-    KernelValue* values = new KernelValue[width*height];
-    float cumWeight = 0.0;
+    KernelValue values[512];
+    float refWeight = 0.2;
+    float cumWeight = refWeight;
+    int curIndex = 0;
 
     for(int y = startY; y < startY + height; y++)
-    for(int x = startX; x < startX + width; x++)
     {
-      values[y*width+x]   = src.pixel(x, y);
-      values[y*width+x].w = qPow(values[y*width+x].distance(refColor), sharpeningCurve);
-      cumWeight += values[y*width+x].w;
+      for(int x = startX; x < startX + width; x++)
+      {        
+        if(y > 0 && y < src.height() && x > 0 && x < src.width())
+        {
+          KernelValue& val = values[curIndex++];
+          val   = src.pixel(x, y);
+          val.w = pow(val.distance(refColor), sharpeningCurve);
+          cumWeight += val.w;
+        }
+      }
     }
 
-    int red   = 0;
-    int blue  = 0;
-    int green = 0;
-    int alpha = 0;
+    double red   = qRed(refColor)*refWeight;
+    double green = qGreen(refColor)*refWeight;
+    double blue  = qBlue(refColor)*refWeight;
+    double alpha = qAlpha(refColor)*refWeight;
 
-    for(int y = 0; y < height; y++)
-    for(int x = 0; x < width; x++)
+    for(int i = 0; i < curIndex; i++)
     {
-      KernelValue& val = values[y*width+x];
+      KernelValue& val = values[i];
       red   += val.r * val.w;
       green += val.g * val.w;
       blue  += val.b * val.w;
       alpha += val.a * val.w;
     }
-    delete[] values;
 
     red   /= cumWeight;
     green /= cumWeight;
@@ -105,11 +117,12 @@ QImage ScaleDPID(const QImage& src, float factor, float sharpeningCurve)
   for(int y = 0; y < retVal.height(); ++y)
   {
     QRgb* line = (QRgb*)retVal.scanLine(y);
-    QRgb* refLine = (QRgb*)retVal.scanLine(y);
+    QRgb* refLine = (QRgb*)reference.scanLine(y);
     for(int x = 0; x < retVal.width(); ++x)
+      //line[x] = qRgb(255, 0, 0);
       line[x] = dpidKernel(src, refLine[x], x*pixelFactor, y*pixelFactor, pixelFactor, pixelFactor, sharpeningCurve);
   }
-
+  qDebug("%d %d", retVal.width(), retVal.height());
   return retVal;
 }
 
