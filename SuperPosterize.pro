@@ -13,10 +13,13 @@ TEMPLATE = app
 
 SOURCES += main.cpp\
         mainwindow.cpp \
-    filters.cpp
+    filters.cpp \
+    Helpers/Angle.cpp
 
 HEADERS  += mainwindow.h \
     filters.h \
-    avir.h
+    avir.h \
+    Helpers/Angle.h \
+    Helpers/Math.h
 
 FORMS    += mainwindow.ui

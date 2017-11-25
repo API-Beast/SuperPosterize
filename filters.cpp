@@ -1,6 +1,7 @@
 #include "filters.h"
 #include "avir.h"
 #include <cmath>
+#include "Helpers/Angle.h"
 
 using namespace std;
 
@@ -13,7 +14,7 @@ QImage ScaleAVIR(const QImage& input, float factor)
     converted = input;
 
   uchar* src = converted.bits();
-  avir::CImageResizer<> ImageResizer(8, 0);
+  avir::CImageResizer<> ImageResizer(8, 0, avir::CImageResizerParamsLR());
 
   int w = input.width();
   int h = input.height();
@@ -66,7 +67,7 @@ namespace
   QRgb dpidKernel(const QImage& src, QRgb refColor, int startX, int startY, int width, int height, float sharpeningCurve)
   {
     KernelValue values[512];
-    float refWeight = 0.2;
+    float refWeight = 0.01;
     float cumWeight = refWeight;
     int curIndex = 0;
 
@@ -107,11 +108,10 @@ namespace
   }
 }
 
-QImage ScaleDPID(const QImage& src, float factor, float sharpeningCurve)
+QImage ScaleDPID(const QImage& src, int pixelFactor, float sharpeningCurve)
 {
   // Implementation of "Rapid, Detail-Preserving Image Downscaling"-Research paper by Nicolas Weber et al from 2016
-  QImage reference = ScaleAVIR(src, factor);
-  int pixelFactor = 1 / factor;
+  QImage reference = ScaleAVIR(src, 1.0f/pixelFactor);
 
   QImage retVal(reference.width(), reference.height(), QImage::Format_ARGB32);
   for(int y = 0; y < retVal.height(); ++y)
@@ -223,28 +223,39 @@ QImage NormalizedGrayscale(const QImage& input, float blackPoint, float midPoint
       float luminance = getLuminance(*pixel);
       float normalized = applyMapping(luminance, minL, medianL, maxL);
       uchar byteV = normalized*255;
-      line[x*4+0] = byteV;
-      line[x*4+1] = byteV;
-      line[x*4+2] = byteV;
+      QColor col;
+      col.setRgba(*pixel);
+      col = col.convertTo(QColor::Hsl);
+      col.setHsl(col.hue(), col.hslSaturation(), byteV);
+      col = col.convertTo(QColor::Rgb);
+      line[x*4+0] = col.red();
+      line[x*4+1] = col.green();
+      line[x*4+2] = col.blue();
     }
   }
   return retVal;
 }
 
-QImage Posterize(const QImage& input, int steps)
+QImage Posterize(const QImage& input, int stepsL, int stepsH)
 {
-  int stepSize = 255 / steps;
+  int stepSizeL = 255 / stepsL;
+  int stepSizeH = 255 / stepsH;
   QImage retVal(input.convertToFormat(QImage::Format_ARGB32));
   for(int y = 0; y < retVal.height(); ++y)
   {
     uchar* line = retVal.scanLine(y);
     for(int x = 0; x < retVal.width(); ++x)
     {
-      uchar val = qMax(qMax(line[x*4+0], line[x*4+1]), line[x*4+2]);
-      uchar byteV = val/stepSize*stepSize;
-      line[x*4+0] = byteV;
-      line[x*4+1] = byteV;
-      line[x*4+2] = byteV;
+      uchar l = qMax(qMax(line[x*4+0], line[x*4+1]), line[x*4+2]);
+      uchar byteV = l/stepSizeL*stepSizeL;
+      QColor col;
+      col.setRgba((reinterpret_cast<QRgb*>(line))[x]);
+      col = col.convertTo(QColor::Hsl);
+      col.setHsl(col.hue()/stepSizeH*stepSizeH, (col.hslSaturation()<20?0:40), byteV);
+      col = col.convertTo(QColor::Rgb);
+      line[x*4+0] = col.red();
+      line[x*4+1] = col.green();
+      line[x*4+2] = col.blue();
     }
   }
   return retVal;

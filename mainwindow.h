@@ -28,6 +28,10 @@ public slots:
   void saveImageAction();
   void loadImageAction();
 
+protected:
+  void dragEnterEvent(QDragEnterEvent *event);
+  void dropEvent(QDropEvent* event);
+
 private:
   Ui::MainWindow *ui = nullptr;
   QGraphicsScene *scene = nullptr;

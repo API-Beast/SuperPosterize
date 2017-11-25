@@ -5,6 +5,9 @@
 #include <QGraphicsScene>
 #include <QGraphicsPixmapItem>
 #include <QtGlobal>
+#include <QtDebug>
+#include <QDropEvent>
+#include <QMimeData>
 
 #include "filters.h"
 
@@ -47,6 +50,10 @@ void MainWindow::settingsChanged()
   bool applyScaling        = ui->settings_Downscale->isChecked();
   bool applyGrayscale      = ui->settings_NormalizeLuminance->isChecked();
   bool applyPosterize      = ui->settings_Posterize->isChecked();
+  bool limitInput          = ui->settings_LimitInputSize->isChecked();
+
+  if(!applyScaling)
+    scaleFactor = 1;
 
   QString scalingMethod = ui->input_ScalingMethod->currentText();
 
@@ -58,32 +65,32 @@ void MainWindow::settingsChanged()
     img = *srcImg;
     int longSide = qMax(srcImg->width(), srcImg->height());
 
-    if(longSide > maxInputSize)
+    if(limitInput && longSide > maxInputSize)
     {
       float factor = (float(maxInputSize)/float(longSide));
       img = ScaleBilinear(img, factor);
     }
-    if(applyGrayscale)
-      img = NormalizedGrayscale(img, blackPoint, grayMidpoint, whitePoint);
     if(applyScaling)
     {
       if(scalingMethod=="AVIR")
         img = ScaleAVIR(img, 1.0 / scaleFactor);
       else if(scalingMethod=="DPID")
-        img = ScaleDPID(img, 1.0 / scaleFactor, sharpeningCurve);
+        img = ScaleDPID(img, scaleFactor, sharpeningCurve);
       else if(scalingMethod=="Bilinear")
         img = ScaleBilinear(img, 1.0 / scaleFactor);
     }
+    if(applyGrayscale)
+      img = NormalizedGrayscale(img, blackPoint, grayMidpoint, whitePoint);
     if(applyAlphaThreshold)
       img = AlphaThreshold(img, alphaThreshold);
     if(applyPosterize)
-      img = Posterize(img, stepsLuminance);
+      img = Posterize(img, stepsLuminance, stepsMaterial);
 
     scene->clear();
     QGraphicsPixmapItem* pixmap = scene->addPixmap(QPixmap::fromImage(img));
     QGraphicsRectItem* rect = scene->addRect(pixmap->boundingRect().adjusted(-2, -2, 2, 2), Qt::SolidLine, Qt::NoBrush);
-    pixmap->setScale(scaleFactor);
-    rect->setScale(scaleFactor);
+    pixmap->setScale(scaleFactor*2);
+    rect->setScale(scaleFactor*2);
     ui->preview->setScene(scene);
   }
 }
@@ -105,3 +112,25 @@ void MainWindow::loadImageAction()
     settingsChanged();
   }
 }
+
+void MainWindow::dragEnterEvent(QDragEnterEvent* event)
+{
+  event->accept();
+}
+
+void MainWindow::dropEvent(QDropEvent* event)
+{
+  QUrl fileName = event->mimeData()->urls()[0];
+  if(!fileName.isEmpty())
+  {
+    if(srcImg)
+        delete srcImg;
+    srcImg = new QImage(fileName.toLocalFile());
+    settingsChanged();
+  }
+
+  event->setDropAction(Qt::CopyAction);
+  event->accept();
+}
+
+
